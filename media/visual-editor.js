@@ -9,6 +9,8 @@
   var mathIdCounter = 0;
   var blockStore = {};
   var citations = {};
+  var figureUris = {};
+  var inputFiles = {};
   var blockIdCounter = 0;
   var rendering = false;
   var editingBlock = null;
@@ -38,6 +40,8 @@
     if (e.data.type === 'update') {
       if (e.data.baseUri) baseUri = e.data.baseUri;
       if (e.data.citations) citations = e.data.citations;
+      if (e.data.figureUris) figureUris = e.data.figureUris;
+      if (e.data.inputFiles) inputFiles = e.data.inputFiles;
       if (ownEdit) { ownEdit = false; return; }
       if (editingBlock) return;
       currentSource = e.data.text;
@@ -524,6 +528,10 @@
     if (en === 'sidewaystable' || en === 'sidewaysfigure') return renderEnvironment(en === 'sidewaystable' ? 'table' : 'figure', content, opts, fullSrc);
     if (en === 'threeparttable') return renderTableEnv(content);
     if (en === 'tblr' || en === 'longtblr') return '<div class="table-placeholder">[Table content]</div>';
+    if (en === 'landscape') return renderInnerBlocks(content);
+    if (en === 'subfigure') return renderSubfigure(content);
+    if (en === 'adjustbox' || en === 'adjustwidth' || en === 'spacing') return renderInnerBlocks(content);
+    if (en === 'singlespace' || en === 'doublespace' || en === 'onehalfspace') return renderInnerBlocks(content);
     if (en === 'abstract') return '<div class="abstract"><div class="abstract-title">Abstract</div><div class="abstract-body">' + renderInnerBlocks(content) + '</div></div>';
     if (en === 'figure' || en === 'figure*') return renderFigure(content);
     if (en === 'table' || en === 'table*') return renderTableEnv(content);
@@ -629,21 +637,51 @@
   // =============================================
   // FIGURES, TABLES, LISTS
   // =============================================
+  function renderFigureImg(imgPath) {
+    var convertedUri = figureUris[imgPath];
+    if (convertedUri) {
+      return '<img src="' + escA(convertedUri) + '" alt="' + escA(imgPath) + '">';
+    }
+    var ext = (imgPath.split('.').pop() || '').toLowerCase();
+    if (ext === 'pdf' || ext === 'eps' || ext === 'ps') {
+      return '<div class="figure-placeholder">[' + esc(imgPath) + ']</div>';
+    }
+    var s = baseUri ? baseUri + '/' + imgPath : imgPath;
+    return '<img src="' + escA(s) + '" alt="' + escA(imgPath) + '" onerror="this.outerHTML=\'<div class=figure-placeholder>[' + escA(imgPath) + ']</div>\'">';
+  }
+
   function renderFigure(c) {
     var h = '<div class="figure">';
-    var im = /\\includegraphics\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/.exec(c);
-    if (im) {
-      var imgPath = im[1];
-      var ext = imgPath.split('.').pop().toLowerCase();
-      if (ext === 'pdf' || ext === 'eps' || ext === 'ps') {
-        h += '<div class="figure-placeholder">[' + esc(imgPath) + ']</div>';
-      } else {
-        var s = baseUri ? baseUri + '/' + imgPath : imgPath;
-        h += '<div class="figure-img"><img src="' + escA(s) + '" alt="' + escA(imgPath) + '" onerror="this.parentElement.innerHTML=\'<div class=figure-placeholder>[' + escA(imgPath) + ']</div>\'"></div>';
+
+    // Check for subfigures
+    var hasSub = /\\begin\{subfigure\}/.test(c);
+    if (hasSub) {
+      h += '<div class="subfigure-row">';
+      var subRe = /\\begin\{subfigure\}(?:\[[^\]]*\])?\{[^}]*\}([\s\S]*?)\\end\{subfigure\}/g;
+      var sm;
+      while ((sm = subRe.exec(c)) !== null) {
+        h += renderSubfigure(sm[1]);
       }
+      h += '</div>';
+    } else {
+      // Single figure
+      var im = /\\includegraphics\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/.exec(c);
+      if (im) h += '<div class="figure-img">' + renderFigureImg(im[1]) + '</div>';
     }
+
+    // Main caption (outside subfigures)
+    var stripped = c.replace(/\\begin\{subfigure\}[\s\S]*?\\end\{subfigure\}/g, '');
+    var cm = /\\caption\s*\{/.exec(stripped);
+    if (cm) { var ct = braceContent(stripped, stripped.indexOf('{', cm.index)); if (ct) h += '<div class="figure-caption"><strong>Figure:</strong> ' + processInline(ct) + '</div>'; }
+    return h + '</div>';
+  }
+
+  function renderSubfigure(c) {
+    var h = '<div class="subfigure">';
+    var im = /\\includegraphics\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/.exec(c);
+    if (im) h += '<div class="figure-img">' + renderFigureImg(im[1]) + '</div>';
     var cm = /\\caption\s*\{/.exec(c);
-    if (cm) { var ct = braceContent(c, c.indexOf('{', cm.index)); if (ct) h += '<div class="figure-caption"><strong>Figure:</strong> ' + processInline(ct) + '</div>'; }
+    if (cm) { var ct = braceContent(c, c.indexOf('{', cm.index)); if (ct) h += '<div class="subfigure-caption">' + processInline(ct) + '</div>'; }
     return h + '</div>';
   }
 
@@ -651,11 +689,75 @@
     var h = '<div class="table-env">';
     var cm = /\\caption\s*\{/.exec(c);
     if (cm) { var ct = braceContent(c, c.indexOf('{', cm.index)); if (ct) h += '<div class="table-caption"><strong>Table:</strong> ' + processInline(ct) + '</div>'; }
+
+    // Try to find tabular content — inline or via \input
+    var tableContent = c;
     var inp = /\\input\s*\{([^}]+)\}/.exec(c);
-    if (inp) h += '<div class="table-placeholder">[Table from: ' + esc(inp[1]) + ']</div>';
+    if (inp && inputFiles[inp[1]]) {
+      tableContent = c.replace(inp[0], inputFiles[inp[1]]);
+    }
+
+    // Parse tabular/tblr
+    var tabM = /\\begin\{(tabular\*?|tabularx|tblr|longtblr)\}\s*(?:\{[^}]*\})?(?:\{[^}]*\})?/.exec(tableContent);
+    if (tabM) {
+      var ts = tabM.index + tabM[0].length;
+      var te = findEndEnv(tableContent, ts, tabM[1]);
+      if (te !== -1) {
+        h += renderTabular(tableContent.substring(ts, te));
+      }
+    } else if (inp) {
+      h += '<div class="table-placeholder">[Table from: ' + esc(inp[1]) + ']</div>';
+    }
+
+    // Table notes (threeparttable)
+    var notesM = /\\begin\{tablenotes\}([\s\S]*?)\\end\{tablenotes\}/.exec(tableContent);
+    if (notesM) {
+      h += '<div class="table-notes">' + renderInnerBlocks(notesM[1]) + '</div>';
+    }
+
     h += '</div>';
     return h;
   }
+
+  function renderTabular(c) {
+    var rows = c.split(/\\\\/);
+    var h = '<table class="latex-table booktabs">';
+    var rowIdx = 0;
+    for (var r = 0; r < rows.length; r++) {
+      var row = rows[r]
+        .replace(/\\(?:toprule|bottomrule)\b/g, '')
+        .replace(/\\midrule\b/g, '')
+        .replace(/\\hline\b/g, '')
+        .replace(/\\cline\{[^}]*\}/g, '')
+        .replace(/\\cmidrule(?:\([^)]*\))?\{[^}]*\}/g, '')
+        .replace(/\\addlinespace(?:\[[^\]]*\])?/g, '')
+        .replace(/\\[-\d.]+(?:pt|em|ex|mm|cm|in)\s*/g, '')
+        .replace(/\\arraystretch/g, '')
+        .replace(/\\renewcommand\{[^}]*\}\{[^}]*\}/g, '')
+        .trim();
+      if (!row) continue;
+      var cells = splitCells(row);
+      var tag = rowIdx === 0 ? 'th' : 'td';
+      h += '<tr>';
+      for (var ci = 0; ci < cells.length; ci++) {
+        var cell = cells[ci].trim();
+        var mc = cell.match(/\\multicolumn\{(\d+)\}\{[^}]*\}\{([\s\S]*)\}/);
+        var mr = cell.match(/\\multirow\{(\d+)\}(?:\{[^}]*\})?\{([\s\S]*)\}/);
+        if (mc) {
+          h += '<' + tag + ' colspan="' + mc[1] + '">' + processInline(mc[2]) + '</' + tag + '>';
+        } else if (mr) {
+          h += '<' + tag + ' rowspan="' + mr[1] + '">' + processInline(mr[2]) + '</' + tag + '>';
+        } else {
+          h += '<' + tag + '>' + processInline(cell) + '</' + tag + '>';
+        }
+      }
+      h += '</tr>';
+      rowIdx++;
+    }
+    return h + '</table>';
+  }
+
+  function splitCells(r) { var c = [], cu = '', d = 0; for (var i = 0; i < r.length; i++) { if (r[i] === '{') d++; if (r[i] === '}') d--; if (r[i] === '&' && d === 0) { c.push(cu); cu = ''; } else cu += r[i]; } c.push(cu); return c; }
 
   function renderList(c, tag) {
     var h = '<' + tag + ' class="latex-list">';

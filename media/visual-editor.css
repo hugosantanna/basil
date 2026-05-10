@@ -333,6 +333,33 @@ p:empty { display: none; }
   border-radius: 2px;
 }
 
+/* Subfigures */
+.subfigure-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  margin: 8px 0;
+}
+
+.subfigure {
+  flex: 1;
+  min-width: 200px;
+  max-width: 48%;
+  text-align: center;
+}
+
+.subfigure .figure-img img {
+  max-width: 100%;
+  height: auto;
+}
+
+.subfigure-caption {
+  font-size: 0.85em;
+  color: var(--ve-muted);
+  margin-top: 4px;
+}
+
 .figure-placeholder,
 .table-placeholder {
   text-align: center;
@@ -378,23 +405,33 @@ p:empty { display: none; }
   width: auto;
   margin: 12px auto;
   border-collapse: collapse;
-  font-size: 0.95em;
+  font-size: 0.9em;
+}
+
+.latex-table.booktabs {
+  border-top: 2px solid var(--ve-fg);
+  border-bottom: 2px solid var(--ve-fg);
 }
 
 .latex-table th,
 .latex-table td {
-  padding: 6px 14px;
+  padding: 4px 12px;
   text-align: left;
-  border-bottom: 1px solid var(--ve-border);
+  border: none;
 }
 
 .latex-table th {
   font-weight: 700;
-  border-bottom: 2px solid var(--ve-fg);
+  border-bottom: 1px solid var(--ve-fg);
 }
 
-.latex-table tr:last-child td {
-  border-bottom: 2px solid var(--ve-fg);
+.table-notes {
+  font-size: 0.82em;
+  color: var(--ve-muted);
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--ve-border);
+  line-height: 1.4;
 }
 
 /* Lists */

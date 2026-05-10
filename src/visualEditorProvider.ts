@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { execSync } from 'child_process';
 
 export class VisualEditorProvider implements vscode.CustomTextEditorProvider {
   public static readonly viewType = 'basil.visualEditor';
@@ -88,12 +89,89 @@ export class VisualEditorProvider implements vscode.CustomTextEditorProvider {
       return citations;
     };
 
+    const cacheDir = path.join(this.context.globalStorageUri.fsPath, 'fig-cache');
+    try { fs.mkdirSync(cacheDir, { recursive: true }); } catch {}
+
+    const convertPdfFigures = (): Record<string, string> => {
+      const text = document.getText();
+      const figMap: Record<string, string> = {};
+      const re = /\\includegraphics\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        let figPath = m[1];
+        const ext = figPath.split('.').pop()?.toLowerCase() || '';
+        if (ext !== 'pdf' && ext !== 'eps') {
+          if (!ext || !['png','jpg','jpeg','gif','svg','bmp','webp'].includes(ext)) {
+            for (const tryExt of ['pdf', 'png', 'jpg', 'jpeg']) {
+              if (fs.existsSync(path.resolve(docDir, figPath + '.' + tryExt))) {
+                figPath = figPath + '.' + tryExt;
+                break;
+              }
+            }
+          } else {
+            continue;
+          }
+        }
+        const absPath = path.resolve(docDir, figPath);
+        if (!fs.existsSync(absPath)) continue;
+
+        const hash = Buffer.from(absPath).toString('base64url').substring(0, 32);
+        const pngPath = path.join(cacheDir, hash + '.png');
+
+        try {
+          const srcStat = fs.statSync(absPath);
+          let needConvert = true;
+          if (fs.existsSync(pngPath)) {
+            const cacheStat = fs.statSync(pngPath);
+            if (cacheStat.mtimeMs >= srcStat.mtimeMs) needConvert = false;
+          }
+          if (needConvert) {
+            if (process.platform === 'darwin') {
+              execSync(`sips -s format png "${absPath}" --out "${pngPath}" 2>/dev/null`, { timeout: 10000 });
+            } else {
+              execSync(`convert -density 150 "${absPath}[0]" "${pngPath}" 2>/dev/null`, { timeout: 10000 });
+            }
+          }
+          if (fs.existsSync(pngPath)) {
+            figMap[figPath] = webviewPanel.webview.asWebviewUri(vscode.Uri.file(pngPath)).toString();
+          }
+        } catch {}
+      }
+      return figMap;
+    };
+
+    webviewPanel.webview.options = {
+      ...webviewPanel.webview.options,
+      localResourceRoots: [
+        ...(webviewPanel.webview.options.localResourceRoots || []),
+        vscode.Uri.file(cacheDir),
+      ],
+    };
+
+    const resolveInputFiles = (): Record<string, string> => {
+      const text = document.getText();
+      const inputs: Record<string, string> = {};
+      const re = /\\input\s*\{([^}]+)\}/g;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        let filePath = m[1];
+        if (!filePath.endsWith('.tex')) filePath += '.tex';
+        const absPath = path.resolve(docDir, filePath);
+        try {
+          inputs[m[1]] = fs.readFileSync(absPath, 'utf-8');
+        } catch {}
+      }
+      return inputs;
+    };
+
     const sendUpdate = () => {
       webviewPanel.webview.postMessage({
         type: 'update',
         text: document.getText(),
         baseUri,
         citations: parseBibFiles(),
+        figureUris: convertPdfFigures(),
+        inputFiles: resolveInputFiles(),
       });
     };
 
