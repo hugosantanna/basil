@@ -354,12 +354,36 @@
       if (mkM) { pos += mkM[0].length; continue; }
 
       // Skip commands that produce no output
-      var skM = mat(text, pos, /^\\(?:clearpage|newpage|pagebreak|bigskip|medskip|smallskip|noindent|indent|centering|raggedright|raggedleft|singlespacing|doublespacing|onehalfspacing|normalsize|small|footnotesize|scriptsize|tiny|large|Large|LARGE|huge|Huge|protect|relax|allowbreak|vfill|hfill|filbreak|nopagebreak|samepage|enlargethispage|null|strut|phantom|hphantom|vphantom)\b\s*/);
+      var skM = mat(text, pos, /^\\(?:clearpage|newpage|pagebreak|bigskip|medskip|smallskip|noindent|indent|centering|raggedright|raggedleft|singlespacing|doublespacing|onehalfspacing|normalsize|small|footnotesize|scriptsize|tiny|large|Large|LARGE|huge|Huge|protect|relax|allowbreak|vfill|hfill|filbreak|nopagebreak|samepage|enlargethispage|null|strut|phantom|hphantom|vphantom|appendix)\b\s*/);
       if (skM) { pos += skM[0].length; continue; }
 
       // \vspace{}, \hspace{}, etc.
-      var spM = mat(text, pos, /^\\(?:vspace|hspace|addvspace|setlength|setcounter|addtocounter|stepcounter)\*?\s*\{/);
-      if (spM) { var sb = pos + spM[0].length - 1; var sc = braceContent(text, sb); pos = sc !== null ? sb + sc.length + 2 : pos + spM[0].length; pos = skipWs(text, pos); continue; }
+      var spM = mat(text, pos, /^\\(?:vspace|hspace|addvspace|setlength|setcounter|addtocounter|stepcounter|renewcommand)\*?\s*\{/);
+      if (spM) {
+        var spPos = pos + spM[0].length - 1;
+        var sp1 = braceContent(text, spPos);
+        if (sp1 !== null) {
+          spPos += sp1.length + 2;
+          spPos = skipWs(text, spPos);
+          if (text[spPos] === '{') {
+            var sp2 = braceContent(text, spPos);
+            if (sp2 !== null) spPos += sp2.length + 2;
+          }
+          pos = skipWs(text, spPos);
+          continue;
+        }
+      }
+
+      // \printbibliography — render bibliography from parsed citations
+      if (mat(text, pos, /^\\printbibliography\b\s*/)) {
+        var bibMatch = mat(text, pos, /^\\printbibliography\b\s*/);
+        var bibStart = pos;
+        var bibLen = bibMatch ? bibMatch[0].length : 18;
+        var bibRendered = renderBibliography();
+        html += wrapBlock(currentSource.substring(base + bibStart, base + bibStart + bibLen), bibRendered, base + bibStart, base + bibStart + bibLen);
+        pos += bibLen;
+        continue;
+      }
 
       // \label{} — skip
       var lbM = mat(text, pos, /^\\label\s*\{/);
@@ -536,6 +560,7 @@
     if (en === 'figure' || en === 'figure*') return renderFigure(content);
     if (en === 'table' || en === 'table*') return renderTableEnv(content);
     if (en === 'tabular' || en === 'tabular*' || en === 'tabularx') return renderTabular(content);
+    if (en === 'tablenotes') return renderTableNotes(content);
     if (en === 'itemize') return renderList(content, 'ul');
     if (en === 'enumerate') return renderList(content, 'ol');
     if (en === 'description') return renderDescList(content);
@@ -655,6 +680,43 @@
       var lbM = mat(text, pos, /^\\label\s*\{/);
       if (lbM) { var lb = pos + lbM[0].length - 1; var lc = braceContent(text, lb); pos = lc !== null ? lb + lc.length + 2 : pos + lbM[0].length; continue; }
 
+      var inM = mat(text, pos, /^\\(?:input|include)\s*\{/);
+      if (inM) {
+        var ib = pos + inM[0].length - 1;
+        var ic = braceContent(text, ib);
+        if (ic !== null) {
+          html += inputFiles[ic] ? renderNestedContent(inputFiles[ic]) : '<div class="input-marker">[Input: ' + esc(ic) + ']</div>';
+          pos = ib + ic.length + 2;
+          continue;
+        }
+      }
+
+      var capM = mat(text, pos, /^\\captionof\s*\{/);
+      if (capM) {
+        flushPara();
+        var kindStart = pos + capM[0].length - 1;
+        var kind = braceContent(text, kindStart);
+        if (kind !== null) {
+          var capPos = skipWs(text, kindStart + kind.length + 2);
+          if (text[capPos] === '{') {
+            var cap = braceContent(text, capPos);
+            if (cap !== null) {
+              html += renderCaptionBlock(kind.trim(), cap);
+              pos = capPos + cap.length + 2;
+              continue;
+            }
+          }
+        }
+      }
+
+      var pb = renderParboxBlock(text, pos);
+      if (pb) {
+        flushPara();
+        html += pb.html;
+        pos = pb.end;
+        continue;
+      }
+
       // $$
       if (text[pos] === '$' && text[pos+1] === '$') {
         flushPara();
@@ -671,22 +733,14 @@
       // \maketitle
       if (mat(text, pos, /^\\maketitle\b/)) { pos += 10; continue; }
 
+      // \null, \vfill and similar layout-only commands
+      if (mat(text, pos, /^\\(?:null|vfill)\b/)) { pos += mat(text, pos, /^\\(?:null|vfill)\b/)[0].length; continue; }
+
       // Accumulate paragraph text
       paraAccum += text[pos];
       pos++;
     }
     flushPara();
-    return html;
-  }
-
-  function renderNestedContent(content) {
-    var cleaned = stripComments(content);
-    var paras = cleaned.split(/\n\s*\n/);
-    var html = '';
-    for (var i = 0; i < paras.length; i++) {
-      var p = paras[i].trim();
-      if (p) html += '<p>' + processInline(p) + '</p>';
-    }
     return html;
   }
 
@@ -758,6 +812,8 @@
     var stripped = c.replace(/\\begin\{subfigure\}[\s\S]*?\\end\{subfigure\}/g, '');
     var cm = /\\caption\s*\{/.exec(stripped);
     if (cm) { var ct = braceContent(stripped, stripped.indexOf('{', cm.index)); if (ct) h += '<div class="figure-caption"><strong>Figure:</strong> ' + processInline(ct) + '</div>'; }
+    var noteHtml = renderParboxBlocks(stripped);
+    if (noteHtml) h += '<div class="figure-notes">' + noteHtml + '</div>';
     return h + '</div>';
   }
 
@@ -765,8 +821,9 @@
     var h = '<div class="subfigure">';
     var im = /\\includegraphics\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/.exec(c);
     if (im) h += '<div class="figure-img">' + renderFigureImg(im[1]) + '</div>';
-    var cm = /\\caption\s*\{/.exec(c);
-    if (cm) { var ct = braceContent(c, c.indexOf('{', cm.index)); if (ct) h += '<div class="subfigure-caption">' + processInline(ct) + '</div>'; }
+    var sm = /\\subcaption\*?\s*\{/.exec(c);
+    if (!sm) sm = /\\caption\s*\{/.exec(c);
+    if (sm) { var ct = braceContent(c, c.indexOf('{', sm.index)); if (ct) h += '<div class="subfigure-caption">' + processInline(ct) + '</div>'; }
     return h + '</div>';
   }
 
@@ -795,10 +852,13 @@
     }
 
     // Table notes (threeparttable)
-    var notesM = /\\begin\{tablenotes\}([\s\S]*?)\\end\{tablenotes\}/.exec(tableContent);
+    var notesM = /\\begin\{tablenotes\}(?:\[[^\]]*\])?([\s\S]*?)\\end\{tablenotes\}/.exec(tableContent);
     if (notesM) {
-      h += '<div class="table-notes">' + renderNestedContent(notesM[1]) + '</div>';
+      h += renderTableNotes(notesM[1]);
     }
+
+    var parboxNotes = renderParboxBlocks(c);
+    if (parboxNotes) h += '<div class="table-notes">' + parboxNotes + '</div>';
 
     h += '</div>';
     return h;
@@ -976,6 +1036,59 @@
       }
     }
     return text.substring(o + 1);
+  }
+  function skipBracedArguments(text, pos, count) {
+    var p = pos;
+    for (var i = 0; i < count; i++) {
+      p = skipWs(text, p);
+      if (p >= text.length || text[p] !== '{') return p;
+      var bc = braceContent(text, p);
+      if (bc === null) return p;
+      p = p + bc.length + 2;
+    }
+    return p;
+  }
+  function stripFormattingCommands(text) {
+    return text
+      .replace(/\\(?:footnotesize|scriptsize|small|normalsize|large|Large|LARGE|huge|Huge)\b/g, '')
+      .replace(/\\(?:vspace|hspace)\*?\s*\{[^}]*\}/g, '')
+      .replace(/\\(?:noindent|indent|centering|raggedright|raggedleft|par|newline)\b/g, '');
+  }
+  function renderCaptionBlock(kind, content) {
+    var label = kind && kind.toLowerCase() === 'table' ? 'Table:' : 'Figure:';
+    var cls = kind && kind.toLowerCase() === 'table' ? 'table-caption' : 'figure-caption';
+    return '<div class="' + cls + '"><strong>' + label + '</strong> ' + processInline(content) + '</div>';
+  }
+  function renderParboxBlock(text, pos) {
+    var pm = mat(text, pos, /^\\parbox\s*\{/);
+    if (!pm) return null;
+    var wStart = pos + pm[0].length - 1;
+    var width = braceContent(text, wStart);
+    if (width === null) return null;
+    var cStart = skipWs(text, wStart + width.length + 2);
+    if (text[cStart] !== '{') return null;
+    var c = braceContent(text, cStart);
+    if (c === null) return null;
+    return {
+      html: '<div class="latex-parbox">' + renderNestedContent(c) + '</div>',
+      end: cStart + c.length + 2,
+    };
+  }
+  function renderParboxBlocks(text) {
+    var html = '';
+    var pos = 0;
+    while (pos < text.length) {
+      var idx = text.indexOf('\\parbox', pos);
+      if (idx === -1) break;
+      var pb = renderParboxBlock(text, idx);
+      if (!pb) { pos = idx + 7; continue; }
+      html += pb.html;
+      pos = pb.end;
+    }
+    return html;
+  }
+  function renderTableNotes(content) {
+    return '<div class="table-notes">' + renderList(stripFormattingCommands(content), 'ul') + '</div>';
   }
   function esc(s) { return s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
   function escA(s) { return s ? s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
