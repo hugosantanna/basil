@@ -240,19 +240,28 @@
   // =============================================
   function renderTitleBlock() {
     var h = '<div class="title-block">';
-    var allThanks = [];
+    var authorThanks = [];
+    var titleThanks = [];
+
+    // Pre-scan to count author thanks first (they appear before title ack)
+    if (authorInfo) {
+      var atPre = renderTitleWithThanks(authorInfo.content, 0);
+      authorThanks = atPre.footnotes;
+    }
+    var authorCount = authorThanks.length;
 
     if (titleInfo) {
-      var tt = renderTitleWithThanks(titleInfo.content, allThanks.length);
+      var tt = renderTitleWithThanks(titleInfo.content, authorCount);
       h += makePreambleBlock('doc-title', 'h1', titleInfo, tt.html);
-      allThanks = allThanks.concat(tt.footnotes);
+      titleThanks = tt.footnotes;
     }
 
     if (authorInfo) {
-      var at = renderTitleWithThanks(authorInfo.content, allThanks.length);
+      var at = renderTitleWithThanks(authorInfo.content, 0);
       h += makePreambleBlock('doc-author', 'div', authorInfo, at.html);
-      allThanks = allThanks.concat(at.footnotes);
     }
+
+    var allThanks = authorThanks.concat(titleThanks);
 
     if (dateInfo) {
       var dd = dateInfo.content.trim() === '\\today' ? new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : processInline(dateInfo.content);
