@@ -8,6 +8,7 @@
   var mathStore = {};
   var mathIdCounter = 0;
   var blockStore = {};
+  var citations = {};
   var blockIdCounter = 0;
   var rendering = false;
   var editingBlock = null;
@@ -36,6 +37,7 @@
   window.addEventListener('message', function (e) {
     if (e.data.type === 'update') {
       if (e.data.baseUri) baseUri = e.data.baseUri;
+      if (e.data.citations) citations = e.data.citations;
       if (ownEdit) { ownEdit = false; return; }
       if (editingBlock) return;
       currentSource = e.data.text;
@@ -157,6 +159,14 @@
   }
 
   function renderPreambleBlock(preamble) {
+    // Strip \title, \author, \date from the preamble source shown in this block
+    // (they get their own editable blocks via renderTitleBlock)
+    var setupPreamble = preamble
+      .replace(/\\title\s*(?:\[[^\]]*\])?\s*\{[^]*?\}[ \t]*/g, function(m, off) { return ' '.repeat(m.length); })
+      .replace(/\\author\s*(?:\[[^\]]*\])?\s*\{[^]*?\}[ \t]*/g, function(m) { return ' '.repeat(m.length); })
+      .replace(/\\date\s*(?:\[[^\]]*\])?\s*\{[^]*?\}[ \t]*/g, function(m) { return ' '.repeat(m.length); });
+
+    // But we still store the REAL source for editing — the user edits the actual preamble
     var bid = 'blk-' + (blockIdCounter++);
     var fullPreamble = preamble + '\\begin{document}';
     blockStore[bid] = fullPreamble;
@@ -205,7 +215,15 @@
     var bs = m.index + m[0].length - 1;
     var c = braceContent(text, bs);
     if (c === null) return null;
-    return { content: c, contentStart: bs + 1, contentEnd: bs + 1 + c.length };
+    var fullCmd = text.substring(m.index, bs + 1 + c.length + 1);
+    return {
+      content: c,
+      fullCmd: fullCmd,
+      cmdStart: m.index,
+      cmdEnd: bs + 1 + c.length + 1,
+      contentStart: bs + 1,
+      contentEnd: bs + 1 + c.length,
+    };
   }
 
   function extractMacros(pre) {
@@ -222,22 +240,77 @@
   // =============================================
   function renderTitleBlock() {
     var h = '<div class="title-block">';
-    if (titleInfo) h += makePreambleBlock('doc-title', 'h1', titleInfo, processInline(titleInfo.content));
-    if (authorInfo) h += makePreambleBlock('doc-author', 'div', authorInfo, processInline(authorInfo.content));
+    var allThanks = [];
+
+    if (titleInfo) {
+      var tt = renderTitleWithThanks(titleInfo.content, allThanks.length);
+      h += makePreambleBlock('doc-title', 'h1', titleInfo, tt.html);
+      allThanks = allThanks.concat(tt.footnotes);
+    }
+
+    if (authorInfo) {
+      var at = renderTitleWithThanks(authorInfo.content, allThanks.length);
+      h += makePreambleBlock('doc-author', 'div', authorInfo, at.html);
+      allThanks = allThanks.concat(at.footnotes);
+    }
+
     if (dateInfo) {
       var dd = dateInfo.content.trim() === '\\today' ? new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : processInline(dateInfo.content);
       h += makePreambleBlock('doc-date', 'div', dateInfo, dd);
     }
+
+    if (allThanks.length > 0) {
+      h += '<div class="title-footnotes">';
+      var markers = ['*', '†', '‡', '§', '¶', '‖'];
+      for (var i = 0; i < allThanks.length; i++) {
+        var mark = markers[i % markers.length];
+        h += '<div class="title-footnote"><span class="fn-marker">' + mark + '</span> ' + processInline(allThanks[i]) + '</div>';
+      }
+      h += '</div>';
+    }
+
     h += '</div>';
     return h;
   }
 
+  function renderTitleWithThanks(text, startIdx) {
+    startIdx = startIdx || 0;
+    var footnotes = [];
+    var markers = ['*', '†', '‡', '§', '¶', '‖'];
+    var placeholders = [];
+    var processed = '';
+    var pos = 0;
+    while (pos < text.length) {
+      var tm = text.substring(pos).match(/^\\thanks\s*\{/);
+      if (tm) {
+        var braceStart = pos + tm[0].length - 1;
+        var content = braceContent(text, braceStart);
+        if (content !== null) {
+          var mark = markers[(startIdx + footnotes.length) % markers.length];
+          footnotes.push(content);
+          var ph = '%%THANKS' + placeholders.length + '%%';
+          placeholders.push('<sup class="thanks-mark">' + mark + '</sup>');
+          processed += ph;
+          pos = braceStart + content.length + 2;
+          continue;
+        }
+      }
+      processed += text[pos];
+      pos++;
+    }
+    var html = processInline(processed);
+    for (var i = 0; i < placeholders.length; i++) {
+      html = html.replace('%%THANKS' + i + '%%', placeholders[i]);
+    }
+    return { html: html, footnotes: footnotes };
+  }
+
   function makePreambleBlock(cls, tag, info, rendered) {
     var bid = 'blk-' + (blockIdCounter++);
-    blockStore[bid] = info.content;
-    return '<div class="ve-block ve-preamble" data-block-id="' + bid + '" data-src-start="' + info.contentStart + '" data-src-end="' + info.contentEnd + '">' +
+    blockStore[bid] = info.fullCmd;
+    return '<div class="ve-block ve-preamble" data-block-id="' + bid + '" data-src-start="' + info.cmdStart + '" data-src-end="' + info.cmdEnd + '">' +
       '<div class="ve-rendered"><' + tag + ' class="' + cls + '">' + rendered + '</' + tag + '></div>' +
-      '<div class="ve-editor" style="display:none"><textarea class="ve-source">' + esc(info.content) + '</textarea></div></div>';
+      '<div class="ve-editor" style="display:none"><textarea class="ve-source">' + esc(info.fullCmd) + '</textarea></div></div>';
   }
 
   // =============================================
@@ -545,6 +618,30 @@
   }
 
   // =============================================
+  // CITATION FORMATTING
+  // =============================================
+  function fmtCite(keys, style) {
+    var parts = keys.split(',');
+    var rendered = [];
+    for (var i = 0; i < parts.length; i++) {
+      var key = parts[i].trim();
+      var c = citations[key];
+      var display;
+      if (c) {
+        if (style === 'author') display = c.author;
+        else if (style === 'text') display = c.author + ' (' + c.year + ')';
+        else display = c.author + ', ' + c.year;
+      } else {
+        display = key;
+      }
+      rendered.push('<span class="cite-key" title="' + escA(key) + '">' + esc(display) + '</span>');
+    }
+    var inner = rendered.join('; ');
+    if (style === 'paren') return '<span class="citation">(' + inner + ')</span>';
+    return '<span class="citation">' + inner + '</span>';
+  }
+
+  // =============================================
   // INLINE PROCESSING
   // =============================================
   function processInline(text) {
@@ -573,7 +670,7 @@
     var cn = cm[1], ce = pos + cm[0].length;
     var brace = {
       textbf:function(c){return'<strong>'+processInline(c)+'</strong>';},textit:function(c){return'<em>'+processInline(c)+'</em>';},emph:function(c){return'<em>'+processInline(c)+'</em>';},underline:function(c){return'<u>'+processInline(c)+'</u>';},textsc:function(c){return'<span class="smallcaps">'+processInline(c)+'</span>';},texttt:function(c){return'<code>'+processInline(c)+'</code>';},text:function(c){return processInline(c);},mbox:function(c){return processInline(c);},
-      cite:function(c){return'<span class="citation"><span class="cite-key">'+esc(c)+'</span></span>';},citep:function(c){return'<span class="citation">(<span class="cite-key">'+esc(c)+'</span>)</span>';},citet:function(c){return'<span class="citation"><span class="cite-key">'+esc(c)+'</span></span>';},citeauthor:function(c){return'<span class="citation"><span class="cite-key">'+esc(c)+'</span></span>';},autocite:function(c){return'<span class="citation"><span class="cite-key">'+esc(c)+'</span></span>';},
+      cite:function(c){return fmtCite(c,'paren');},citep:function(c){return fmtCite(c,'paren');},citet:function(c){return fmtCite(c,'text');},citeauthor:function(c){return fmtCite(c,'author');},autocite:function(c){return fmtCite(c,'paren');},
       ref:function(c){return'<span class="reference">'+esc(c)+'</span>';},eqref:function(c){return'<span class="reference">('+esc(c)+')</span>';},autoref:function(c){return'<span class="reference">'+esc(c)+'</span>';},Cref:function(c){return'<span class="reference">'+esc(c)+'</span>';},cref:function(c){return'<span class="reference">'+esc(c)+'</span>';},hyperref:function(c){return'<span class="reference">'+processInline(c)+'</span>';},
       footnote:function(c){return'<sup class="footnote" title="'+escA(c)+'">[fn]</sup>';},thanks:function(c){return'<sup class="footnote" title="'+escA(c)+'">*</sup>';},url:function(c){return'<a class="url">'+esc(c)+'</a>';},
       label:function(){return'';},tag:function(){return'';},phantom:function(){return'';},hphantom:function(){return'';},vphantom:function(){return'';}

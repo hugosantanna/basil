@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 
 export class VisualEditorProvider implements vscode.CustomTextEditorProvider {
   public static readonly viewType = 'basil.visualEditor';
@@ -38,11 +39,59 @@ export class VisualEditorProvider implements vscode.CustomTextEditorProvider {
 
     let initialUpdateSent = false;
 
+    const parseBibFiles = (): Record<string, { author: string; year: string; title: string }> => {
+      const text = document.getText();
+      const citations: Record<string, { author: string; year: string; title: string }> = {};
+      const bibNames: string[] = [];
+
+      const bibMatch = /\\bibliography\{([^}]+)\}/.exec(text);
+      if (bibMatch) bibMatch[1].split(',').forEach(b => bibNames.push(b.trim()));
+      const addbibRe = /\\addbibresource\{([^}]+)\}/g;
+      let m;
+      while ((m = addbibRe.exec(text)) !== null) bibNames.push(m[1]);
+
+      for (const bibName of bibNames) {
+        const bibFile = bibName.endsWith('.bib') ? bibName : bibName + '.bib';
+        const bibPath = path.resolve(docDir, bibFile);
+        try {
+          const content = fs.readFileSync(bibPath, 'utf-8');
+          const entryRe = /@\w+\{([^,]+),([^]*?)(?=\n@|\n*$)/g;
+          let em;
+          while ((em = entryRe.exec(content)) !== null) {
+            const key = em[1].trim();
+            const body = em[2];
+            const authorM = /author\s*=\s*\{([^}]+)\}/i.exec(body);
+            const yearM = /year\s*=\s*\{?(\d{4})\}?/i.exec(body);
+            const titleM = /title\s*=\s*\{([^}]+)\}/i.exec(body);
+            if (authorM || yearM) {
+              const rawAuthor = authorM ? authorM[1] : '';
+              const authors = rawAuthor.split(/\s+and\s+/);
+              let formatted: string;
+              if (authors.length === 1) {
+                formatted = authors[0].split(',')[0].trim();
+              } else if (authors.length === 2) {
+                formatted = authors[0].split(',')[0].trim() + ' and ' + authors[1].split(',')[0].trim();
+              } else {
+                formatted = authors[0].split(',')[0].trim() + ' et al.';
+              }
+              citations[key] = {
+                author: formatted,
+                year: yearM ? yearM[1] : '',
+                title: titleM ? titleM[1] : '',
+              };
+            }
+          }
+        } catch {}
+      }
+      return citations;
+    };
+
     const sendUpdate = () => {
       webviewPanel.webview.postMessage({
         type: 'update',
         text: document.getText(),
         baseUri,
+        citations: parseBibFiles(),
       });
     };
 

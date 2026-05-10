@@ -1,8 +1,17 @@
-# Basil
+<p align="center">
+  <img src="assets/basil-icon.png" alt="Basil" width="200">
+</p>
 
-Overleaf-style visual editor for LaTeX in VS Code.
+<h1 align="center">Basil</h1>
+<p align="center"><strong>LaTeX Visual Editor for VS Code</strong></p>
 
-Basil renders your `.tex` files as rich, readable documents — equations via KaTeX, formatted sections, tables, lists, theorems, figures, and TikZ placeholders. Click any block to reveal the raw LaTeX source, edit it directly, and click away to re-render. The entire document is editable: preamble, title, body, math, tables, everything.
+<p align="center">
+Overleaf-style visual editor that renders your <code>.tex</code> files as rich, readable documents.<br>
+Click any block to reveal the raw LaTeX source, edit it directly, click away to re-render.<br>
+The entire document is editable: preamble, title, body, math, tables, everything.
+</p>
+
+---
 
 ![Visual Editor](assets/visual-editor.png)
 

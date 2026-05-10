@@ -4,6 +4,7 @@
   "description": "Overleaf-style visual editor for LaTeX with live KaTeX rendering and autocomplete",
   "version": "0.2.0",
   "publisher": "clo-author",
+  "icon": "assets/basil-icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },

@@ -34,6 +34,33 @@ html, body {
   padding: 40px 24px 120px;
 }
 
+/* Title footnotes (\thanks) */
+.title-footnotes {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ve-border);
+  font-size: 0.85em;
+  color: var(--ve-muted);
+}
+
+.title-footnote {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.fn-marker {
+  font-weight: 600;
+  color: var(--ve-fg);
+  margin-right: 2px;
+}
+
+.thanks-mark {
+  color: var(--ve-accent);
+  font-size: 0.8em;
+  vertical-align: super;
+  font-weight: 600;
+}
+
 /* Preamble block */
 .ve-preamble-block {
   margin-bottom: 16px;
