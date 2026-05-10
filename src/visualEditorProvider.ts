@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
+import * as crypto from 'crypto';
 
 export class VisualEditorProvider implements vscode.CustomTextEditorProvider {
   public static readonly viewType = 'basil.visualEditor';
@@ -115,7 +116,7 @@ export class VisualEditorProvider implements vscode.CustomTextEditorProvider {
         const absPath = path.resolve(docDir, figPath);
         if (!fs.existsSync(absPath)) continue;
 
-        const hash = Buffer.from(absPath).toString('base64url').substring(0, 32);
+        const hash = crypto.createHash('sha256').update(absPath).digest('hex').substring(0, 32);
         const pngPath = path.join(cacheDir, hash + '.png');
 
         try {
