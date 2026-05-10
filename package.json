@@ -8,6 +8,9 @@
     "vscode": "^1.85.0"
   },
   "categories": ["Other"],
+  "capabilities": {
+    "languageModelAccess": true
+  },
   "activationEvents": [
     "onLanguage:latex",
     "onLanguage:tex"
@@ -37,6 +40,22 @@
       {
         "command": "basil.toggleHoverPreview",
         "title": "Basil: Toggle Hover Math Preview"
+      },
+      {
+        "command": "basil.aiDraft",
+        "title": "Basil: AI Draft (write LaTeX at cursor)"
+      },
+      {
+        "command": "basil.aiEdit",
+        "title": "Basil: AI Edit (rewrite selection)"
+      },
+      {
+        "command": "basil.aiExplain",
+        "title": "Basil: AI Explain (explain selection)"
+      },
+      {
+        "command": "basil.aiFixError",
+        "title": "Basil: AI Fix Errors"
       }
     ],
     "configuration": {

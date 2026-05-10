@@ -3,6 +3,7 @@ import { InlineMathDecorator } from './inlineDecorator';
 import { MathHoverProvider } from './hoverProvider';
 import { VisualEditorProvider } from './visualEditorProvider';
 import { LaTeXCompletionProvider } from './completionProvider';
+import { registerAICommands } from './aiAssistant';
 
 const LATEX_SELECTOR = [
   { language: 'latex' },
@@ -16,6 +17,7 @@ export function activate(context: vscode.ExtensionContext) {
   const completionProvider = new LaTeXCompletionProvider();
 
   context.subscriptions.push(VisualEditorProvider.register(context));
+  registerAICommands(context);
 
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider(
