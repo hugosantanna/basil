@@ -1,0 +1,102 @@
+\documentclass{article}
+\usepackage{amsmath,amssymb,amsthm,graphicx}
+
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\operatorname{Var}}
+\DeclareMathOperator{\plim}{plim}
+
+\newtheorem{theorem}{Theorem}
+
+\title{Does Employer-Based Immigration Enforcement Reduce the Undocumented Immigrant Population?}
+\author{Samyam Shrestha \quad Hugo Sant'Anna}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This paper replicates \cite{bohn2014did} (\emph{Review of Economics and Statistics}, 2014), who use the synthetic control method to estimate the effect of Arizona's 2007 Legal Arizona Workers Act (LAWA) on the state's likely unauthorized immigrant population. Our narrow replication confirms their main finding: LAWA implementation led to a 1.5--2 percentage point decline in the share of noncitizen Hispanics.
+\end{abstract}
+
+\section{Introduction}
+Over the past few decades, interior immigration enforcement in the U.S. has intensified considerably. Enforcement approaches fall into a few broad categories. The first is police-based enforcement, where law enforcement directly targets and apprehends undocumented individuals. The second is government-service-based enforcement, where access to public benefits or services such as driver's licenses, school enrollment, healthcare, and public housing is conditioned on proving legal status.
+
+One of the clearest examples of this labor-market approach in action is the 2007 Legal Arizona Workers Act (LAWA). The law mandated that all employers in Arizona participate in E-Verify and imposed sanctions on firms found to knowingly hire unauthorized workers.
+
+\subsection{Methodology}
+The synthetic control method constructs a weighted combination of control units to approximate the treated unit's trajectory prior to treatment. The weights solve:
+\[
+  \min_{w} \sum_{t \leq T_0} \left( Y_{\text{AZ},t} - \sum_{j \in \mathcal{D}} w_j Y_{jt} \right)^2.
+\]
+Here, $T_0$ is the last pre-LAWA year. The estimated treatment effect at time $t > T_0$ is the gap between Arizona and its synthetic control.
+
+\begin{equation}
+  \widehat{\tau}_t = Y_{\text{AZ},t} - \sum_{j \in \mathcal{D}} w_j Y_{jt}.
+  \label{eq:tau}
+\end{equation}
+
+The difference-in-differences estimator is:
+\begin{align}
+  Y_{it} &= \alpha + \beta \cdot D_{it} + \gamma_i + \delta_t + \varepsilon_{it} \\
+  \hat{\tau}^{\mathrm{ATT}} &= \E\!\left[Y_i(1) - Y_i(0) \mid D_i = 1\right]
+\end{align}
+
+\section{Data}
+We use data from the American Community Survey (ACS) for the years 2000--2015. Table~\ref{tab:summary} presents summary statistics.
+
+\begin{table}[htbp]
+\centering
+\caption{Summary Statistics}
+\label{tab:summary}
+\begin{tabular}{lcc}
+\hline
+Variable & Mean & Std. Dev. \\
+\hline
+Share noncitizen Hispanic & 0.045 & 0.032 \\
+Population (millions) & 5.2 & 6.1 \\
+Employment rate & 0.62 & 0.05 \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Results}
+Our results are as follows:
+
+\begin{itemize}
+  \item LAWA led to a 1.5--2 percentage point decline in the noncitizen Hispanic share.
+  \item The effect attenuates after 2011.
+  \item Both outflows and inflows responded to the law.
+\end{itemize}
+
+The propensity score weighting estimator is:
+\[
+  \hat{\tau}_{\mathrm{IPW}} = \frac{1}{N} \sum_{i=1}^{N}
+  \left[
+    \frac{D_i Y_i}{\hat{e}(X_i)} -
+    \frac{(1 - D_i) Y_i}{1 - \hat{e}(X_i)}
+  \right].
+\]
+
+\subsection{Robustness}
+We assess robustness using permutation, or placebo, tests. Statistical significance is assessed by iteratively assigning treatment to donor states and comparing Arizona's post-treatment gap to the placebo distribution.
+
+\begin{theorem}
+Under assumptions A1--A3, the ATT is identified by
+\[
+  \tau^{\mathrm{ATT}} = \E\!\left[Y(1) - Y(0) \mid D = 1\right].
+\]
+\end{theorem}
+
+\begin{proof}
+By the law of iterated expectations and the conditional independence assumption,
+\[
+  \E\!\left[Y(0) \mid D = 1\right]
+  = \E\!\left[\E\!\left[Y(0) \mid X, D = 1\right] \mid D = 1\right]
+  = \E\!\left[\E\!\left[Y(0) \mid X, D = 0\right] \mid D = 1\right].
+\]
+\end{proof}
+
+\section{Conclusion}
+This paper replicates and extends \cite{bohn2014did}. The core finding is robust across all three exercises; however, we find that the effect attenuates after 2011, suggesting partial reversion over the longer horizon.\footnote{See Online Appendix for additional details.}
+
+\end{document}

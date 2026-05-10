@@ -1,0 +1,89 @@
+{
+  "name": "basil",
+  "displayName": "Basil",
+  "description": "Overleaf-style visual editor for LaTeX with live KaTeX rendering and autocomplete",
+  "version": "0.2.0",
+  "publisher": "clo-author",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onLanguage:latex",
+    "onLanguage:tex"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "basil.visualEditor",
+        "displayName": "LaTeX Visual Editor",
+        "selector": [
+          { "filenamePattern": "*.tex" },
+          { "filenamePattern": "*.ltx" }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      {
+        "command": "basil.openVisualEditor",
+        "title": "Basil: Open Visual Editor"
+      },
+      {
+        "command": "basil.toggleInlinePreview",
+        "title": "Basil: Toggle Inline Math Preview"
+      },
+      {
+        "command": "basil.toggleHoverPreview",
+        "title": "Basil: Toggle Hover Math Preview"
+      }
+    ],
+    "configuration": {
+      "title": "Basil",
+      "properties": {
+        "basil.inlinePreview.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline math preview decorations"
+        },
+        "basil.hoverPreview.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable hover math preview"
+        },
+        "basil.inlinePreview.fontSize": {
+          "type": "number",
+          "default": 14,
+          "description": "Font size for inline rendered math (px)"
+        },
+        "basil.inlinePreview.opacity": {
+          "type": "number",
+          "default": 0.85,
+          "description": "Opacity of inline preview decorations"
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "latex",
+        "extensions": [".tex", ".ltx", ".sty", ".cls"],
+        "aliases": ["LaTeX", "latex"]
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "katex": "^0.16.9"
+  }
+}
