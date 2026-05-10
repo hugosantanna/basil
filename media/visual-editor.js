@@ -797,7 +797,7 @@
     // Table notes (threeparttable)
     var notesM = /\\begin\{tablenotes\}([\s\S]*?)\\end\{tablenotes\}/.exec(tableContent);
     if (notesM) {
-      h += '<div class="table-notes">' + renderInnerBlocks(notesM[1]) + '</div>';
+      h += '<div class="table-notes">' + renderNestedContent(notesM[1]) + '</div>';
     }
 
     h += '</div>';
