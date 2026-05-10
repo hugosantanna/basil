@@ -350,7 +350,7 @@
       if (mkM) { pos += mkM[0].length; continue; }
 
       // Skip commands that produce no output
-      var skM = mat(text, pos, /^\\(?:clearpage|newpage|pagebreak|bigskip|medskip|smallskip|noindent|indent|centering|raggedright|raggedleft|singlespacing|doublespacing|onehalfspacing|normalsize|small|footnotesize|scriptsize|tiny|large|Large|LARGE|huge|Huge|protect|relax|allowbreak)\b\s*/);
+      var skM = mat(text, pos, /^\\(?:clearpage|newpage|pagebreak|bigskip|medskip|smallskip|noindent|indent|centering|raggedright|raggedleft|singlespacing|doublespacing|onehalfspacing|normalsize|small|footnotesize|scriptsize|tiny|large|Large|LARGE|huge|Huge|protect|relax|allowbreak|vfill|hfill|filbreak|nopagebreak|samepage|enlargethispage|null|strut|phantom|hphantom|vphantom)\b\s*/);
       if (skM) { pos += skM[0].length; continue; }
 
       // \vspace{}, \hspace{}, etc.
@@ -520,6 +520,10 @@
       return renderMathDisplay(w);
     }
     if (TIKZ_ENVS.indexOf(en) !== -1) return renderTikzPreview();
+    if (en === 'titlepage') return renderTitlepage(content);
+    if (en === 'sidewaystable' || en === 'sidewaysfigure') return renderEnvironment(en === 'sidewaystable' ? 'table' : 'figure', content, opts, fullSrc);
+    if (en === 'threeparttable') return renderTableEnv(content);
+    if (en === 'tblr' || en === 'longtblr') return '<div class="table-placeholder">[Table content]</div>';
     if (en === 'abstract') return '<div class="abstract"><div class="abstract-title">Abstract</div><div class="abstract-body">' + renderInnerBlocks(content) + '</div></div>';
     if (en === 'figure' || en === 'figure*') return renderFigure(content);
     if (en === 'table' || en === 'table*') return renderTableEnv(content);
@@ -539,6 +543,47 @@
       return '<div class="theorem-env ' + en + '-env"><span class="theorem-label">' + (isPf ? 'Proof.' : lbl + '.') + '</span> ' + renderInnerBlocks(content) + (isPf ? ' <span class="qed">&#9633;</span>' : '') + '</div>';
     }
     return '<div class="unknown-env">' + renderInnerBlocks(content) + '</div>';
+  }
+
+  function renderTitlepage(content) {
+    var ti = extractCmdInfo(content, 'title');
+    var ai = extractCmdInfo(content, 'author');
+    var di = extractCmdInfo(content, 'date');
+
+    var h = '<div class="title-block">';
+    var authorThanks = [];
+    var titleThanks = [];
+
+    if (ai) {
+      var atPre = renderTitleWithThanks(ai.content, 0);
+      authorThanks = atPre.footnotes;
+    }
+
+    if (ti) {
+      var tt = renderTitleWithThanks(ti.content, authorThanks.length);
+      h += '<h1 class="doc-title">' + tt.html + '</h1>';
+      titleThanks = tt.footnotes;
+    }
+    if (ai) {
+      var at = renderTitleWithThanks(ai.content, 0);
+      h += '<div class="doc-author">' + at.html + '</div>';
+    }
+    if (di) {
+      var dd = di.content.trim() === '\\today' ? new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : processInline(di.content);
+      h += '<div class="doc-date">' + dd + '</div>';
+    }
+
+    var allThanks = authorThanks.concat(titleThanks);
+    if (allThanks.length > 0) {
+      h += '<div class="title-footnotes">';
+      var markers = ['*', '†', '‡', '§', '¶', '‖'];
+      for (var i = 0; i < allThanks.length; i++) {
+        h += '<div class="title-footnote"><span class="fn-marker">' + markers[i % markers.length] + '</span> ' + processInline(allThanks[i]) + '</div>';
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+    return h;
   }
 
   function renderInnerBlocks(content) {
@@ -587,38 +632,30 @@
   function renderFigure(c) {
     var h = '<div class="figure">';
     var im = /\\includegraphics\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/.exec(c);
-    if (im) { var s = baseUri ? baseUri + '/' + im[1] : im[1]; h += '<div class="figure-img"><img src="' + escA(s) + '" alt="' + escA(im[1]) + '"></div>'; }
-    var cm = /\\caption\s*\{/.exec(c); if (cm) { var ct = braceContent(c, c.indexOf('{', cm.index)); if (ct) h += '<div class="figure-caption"><strong>Figure:</strong> ' + processInline(ct) + '</div>'; }
+    if (im) {
+      var imgPath = im[1];
+      var ext = imgPath.split('.').pop().toLowerCase();
+      if (ext === 'pdf' || ext === 'eps' || ext === 'ps') {
+        h += '<div class="figure-placeholder">[' + esc(imgPath) + ']</div>';
+      } else {
+        var s = baseUri ? baseUri + '/' + imgPath : imgPath;
+        h += '<div class="figure-img"><img src="' + escA(s) + '" alt="' + escA(imgPath) + '" onerror="this.parentElement.innerHTML=\'<div class=figure-placeholder>[' + escA(imgPath) + ']</div>\'"></div>';
+      }
+    }
+    var cm = /\\caption\s*\{/.exec(c);
+    if (cm) { var ct = braceContent(c, c.indexOf('{', cm.index)); if (ct) h += '<div class="figure-caption"><strong>Figure:</strong> ' + processInline(ct) + '</div>'; }
     return h + '</div>';
   }
 
   function renderTableEnv(c) {
     var h = '<div class="table-env">';
-    var cm = /\\caption\s*\{/.exec(c); if (cm) { var ct = braceContent(c, c.indexOf('{', cm.index)); if (ct) h += '<div class="table-caption"><strong>Table:</strong> ' + processInline(ct) + '</div>'; }
-    var tm = /\\begin\{(tabular\*?|tabularx)\}\s*(?:\{[^}]*\})?(?:\{[^}]*\})?/.exec(c);
-    if (tm) { var ts = tm.index + tm[0].length, te = findEndEnv(c, ts, tm[1]); if (te !== -1) h += renderTabular(c.substring(ts, te)); }
-    return h + '</div>';
+    var cm = /\\caption\s*\{/.exec(c);
+    if (cm) { var ct = braceContent(c, c.indexOf('{', cm.index)); if (ct) h += '<div class="table-caption"><strong>Table:</strong> ' + processInline(ct) + '</div>'; }
+    var inp = /\\input\s*\{([^}]+)\}/.exec(c);
+    if (inp) h += '<div class="table-placeholder">[Table from: ' + esc(inp[1]) + ']</div>';
+    h += '</div>';
+    return h;
   }
-
-  function renderTabular(c) {
-    var rows = c.split(/\\\\/), h = '<table class="latex-table">', first = true;
-    for (var r = 0; r < rows.length; r++) {
-      var row = rows[r].replace(/\\(?:hline|toprule|midrule|bottomrule|cline\{[^}]*\}|cmidrule(?:\([^)]*\))?\{[^}]*\}|arraystretch)/g, '').trim();
-      if (!row) continue;
-      var cells = splitCells(row), tag = first ? 'th' : 'td';
-      h += '<tr>';
-      for (var c2 = 0; c2 < cells.length; c2++) {
-        var cell = cells[c2].trim();
-        var mc = cell.match(/\\multicolumn\{(\d+)\}\{[^}]*\}\{([\s\S]*)\}/);
-        h += mc ? '<' + tag + ' colspan="' + mc[1] + '">' + processInline(mc[2]) + '</' + tag + '>' : '<' + tag + '>' + processInline(cell) + '</' + tag + '>';
-      }
-      h += '</tr>';
-      first = false;
-    }
-    return h + '</table>';
-  }
-
-  function splitCells(r) { var c = [], cu = '', d = 0; for (var i = 0; i < r.length; i++) { if (r[i] === '{') d++; if (r[i] === '}') d--; if (r[i] === '&' && d === 0) { c.push(cu); cu = ''; } else cu += r[i]; } c.push(cu); return c; }
 
   function renderList(c, tag) {
     var h = '<' + tag + ' class="latex-list">';
@@ -709,6 +746,11 @@
     var em = mat(text, pos, /^\\([%$&#_{}\~\^])/);
     if (em) { var e = em[1]; if (e === '~') return { html: '&tilde;', end: pos+2 }; if (e === '^') return { html: '&circ;', end: pos+2 }; return { html: esc(e), end: pos + em[0].length }; }
     if (text[pos+1] === '\\') { var be = pos+2; if (text[be] === '[') { var bc = text.indexOf(']', be); if (bc !== -1) be = bc+1; } return { html: '<br>', end: be }; }
+    if (text[pos+1] === ' ' || text[pos+1] === '\t') return { html: ' ', end: pos + 2 };
+    if (text[pos+1] === ',') return { html: '&thinsp;', end: pos + 2 };
+    if (text[pos+1] === ';') return { html: '&ensp;', end: pos + 2 };
+    if (text[pos+1] === '!') return { html: '', end: pos + 2 };
+    if (text[pos+1] === '/') return { html: '', end: pos + 2 };
     var cm = mat(text, pos, /^\\([a-zA-Z@]+)\*?/); if (!cm) return null;
     var cn = cm[1], ce = pos + cm[0].length;
     var brace = {

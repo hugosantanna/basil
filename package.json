@@ -5,6 +5,10 @@
   "version": "0.2.0",
   "publisher": "clo-author",
   "icon": "assets/basil-icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hugosantanna/basil"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
