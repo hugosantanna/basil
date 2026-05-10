@@ -69,19 +69,20 @@ export class VisualEditorProvider implements vscode.CustomTextEditorProvider {
             if (authorM || yearM) {
               const rawAuthor = authorM ? authorM[1] : '';
               const authors = rawAuthor.split(/\s+and\s+/);
+              const cleanName = (s: string) => latexToUnicode(s.split(',')[0].trim());
               let formatted: string;
               if (authors.length === 1) {
-                formatted = authors[0].split(',')[0].trim();
+                formatted = cleanName(authors[0]);
               } else if (authors.length === 2) {
-                formatted = authors[0].split(',')[0].trim() + ' and ' + authors[1].split(',')[0].trim();
+                formatted = cleanName(authors[0]) + ' and ' + cleanName(authors[1]);
               } else {
-                formatted = authors[0].split(',')[0].trim() + ' et al.';
+                formatted = cleanName(authors[0]) + ' et al.';
               }
               citations[key] = {
                 author: formatted,
                 year: yearM ? yearM[1] : '',
-                title: titleM ? titleM[1] : '',
-                journal: journalM ? journalM[1] : '',
+                title: latexToUnicode(titleM ? titleM[1] : ''),
+                journal: latexToUnicode(journalM ? journalM[1] : ''),
               };
             }
           }
@@ -263,4 +264,27 @@ function getNonce(): string {
     text += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return text;
+}
+
+function latexToUnicode(s: string): string {
+  const accents: Record<string, Record<string, string>> = {
+    '"': { a:'ä',e:'ë',i:'ï',o:'ö',u:'ü',A:'Ä',E:'Ë',I:'Ï',O:'Ö',U:'Ü' },
+    "'": { a:'á',e:'é',i:'í',o:'ó',u:'ú',A:'Á',E:'É',I:'Í',O:'Ó',U:'Ú',c:'ć',n:'ń',s:'ś',z:'ź' },
+    '`': { a:'à',e:'è',i:'ì',o:'ò',u:'ù',A:'À',E:'È',I:'Ì',O:'Ò',U:'Ù' },
+    '~': { a:'ã',n:'ñ',o:'õ',A:'Ã',N:'Ñ',O:'Õ' },
+    '^': { a:'â',e:'ê',i:'î',o:'ô',u:'û',A:'Â',E:'Ê',I:'Î',O:'Ô',U:'Û' },
+    'v': { c:'č',s:'š',z:'ž',C:'Č',S:'Š',Z:'Ž',r:'ř',e:'ě' },
+    'c': { c:'ç',C:'Ç',s:'ş',S:'Ş' },
+    'H': { o:'ő',u:'ű',O:'Ő',U:'Ű' },
+  };
+  return s
+    .replace(/\{\\([\"\'`~^vcH])\{?(\w)\}?\}/g, (_, acc, ch) => accents[acc]?.[ch] || ch)
+    .replace(/\\([\"\'`~^vcH])\{(\w)\}/g, (_, acc, ch) => accents[acc]?.[ch] || ch)
+    .replace(/\\([\"\'`~^vcH])(\w)/g, (_, acc, ch) => accents[acc]?.[ch] || ch)
+    .replace(/\\ss\b/g, 'ß')
+    .replace(/\\o\b/g, 'ø').replace(/\\O\b/g, 'Ø')
+    .replace(/\\aa\b/g, 'å').replace(/\\AA\b/g, 'Å')
+    .replace(/\\ae\b/g, 'æ').replace(/\\AE\b/g, 'Æ')
+    .replace(/\\oe\b/g, 'œ').replace(/\\OE\b/g, 'Œ')
+    .replace(/\{|\}/g, '');
 }

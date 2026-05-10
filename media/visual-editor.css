@@ -268,29 +268,58 @@ p:empty { display: none; }
   padding: 4px 0;
 }
 
+.ve-editor-wrap {
+  position: relative;
+  border: 1px solid var(--ve-border);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.ve-editor-wrap:focus-within {
+  border-color: var(--ve-accent);
+  box-shadow: 0 0 0 1px var(--ve-accent);
+}
+
+.ve-highlight,
 .ve-source {
-  width: 100%;
   font-family: var(--ve-mono);
   font-size: 14px;
   line-height: 1.6;
-  color: var(--ve-fg);
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--ve-border);
-  border-radius: 4px;
   padding: 8px 12px;
-  resize: none;
-  outline: none;
-  box-sizing: border-box;
   white-space: pre-wrap;
+  word-wrap: break-word;
   tab-size: 2;
+  margin: 0;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.ve-highlight {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  color: var(--ve-fg);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.ve-source {
+  position: relative;
+  color: transparent;
+  caret-color: var(--ve-fg);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
   overflow: hidden;
   field-sizing: content;
 }
 
-.ve-source:focus {
-  border-color: var(--ve-accent);
-  box-shadow: 0 0 0 1px var(--ve-accent);
-}
+/* Syntax highlighting colors */
+.hl-cmd { color: #c586c0; }
+.hl-env { color: #4ec9b0; }
+.hl-math { color: #dcdcaa; }
+.hl-comment { color: #6a9955; font-style: italic; }
 
 /* Citations */
 .citation {

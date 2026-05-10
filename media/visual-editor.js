@@ -89,12 +89,19 @@
     var rendered = el.querySelector('.ve-rendered');
     var editor = el.querySelector('.ve-editor');
     var ta = el.querySelector('.ve-source');
+    var hl = el.querySelector('.ve-highlight');
     rendered.style.display = 'none';
     editor.style.display = 'block';
     el.classList.add('editing');
     editingBlock = el;
     autoSize(ta);
-    ta.addEventListener('input', function() { autoSize(ta); });
+    ta.addEventListener('input', function() {
+      autoSize(ta);
+      if (hl) hl.innerHTML = hlLatex(ta.value);
+    });
+    ta.addEventListener('scroll', function() {
+      if (hl) { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; }
+    });
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);
   }
@@ -488,7 +495,18 @@
     blockStore[bid] = source;
     return '<div class="ve-block" data-block-id="' + bid + '" data-src-start="' + srcStart + '" data-src-end="' + srcEnd + '">' +
       '<div class="ve-rendered">' + rendered + '</div>' +
-      '<div class="ve-editor" style="display:none"><textarea class="ve-source">' + esc(source) + '</textarea></div></div>';
+      '<div class="ve-editor" style="display:none">' +
+      '<div class="ve-editor-wrap"><pre class="ve-highlight">' + hlLatex(source) + '</pre>' +
+      '<textarea class="ve-source">' + esc(source) + '</textarea></div></div></div>';
+  }
+
+  function hlLatex(src) {
+    var s = esc(src);
+    s = s.replace(/(\\(?:begin|end))\{(\w+\*?)\}/g, '<span class="hl-cmd">$1</span>{<span class="hl-env">$2</span>}');
+    s = s.replace(/\\([a-zA-Z@]+)/g, '<span class="hl-cmd">\\$1</span>');
+    s = s.replace(/(\$[^$]*\$)/g, '<span class="hl-math">$1</span>');
+    s = s.replace(/(%[^\n]*)/g, '<span class="hl-comment">$1</span>');
+    return s;
   }
 
   function findParaEnd(text, start) {
