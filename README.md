@@ -4,6 +4,10 @@ Overleaf-style visual editor for LaTeX in VS Code.
 
 Basil renders your `.tex` files as rich, readable documents — equations via KaTeX, formatted sections, tables, lists, theorems, figures, and TikZ placeholders. Click any block to reveal the raw LaTeX source, edit it directly, and click away to re-render. The entire document is editable: preamble, title, body, math, tables, everything.
 
+![Visual Editor](assets/visual-editor.png)
+
+![Code Editor](assets/code-editor.png)
+
 ## Features
 
 **Visual Editor** — Open any `.tex` file with `Basil: Open Visual Editor` (or right-click tab → Reopen Editor With → LaTeX Visual Editor).
