@@ -39,9 +39,9 @@ export class VisualEditorProvider implements vscode.CustomTextEditorProvider {
 
     let initialUpdateSent = false;
 
-    const parseBibFiles = (): Record<string, { author: string; year: string; title: string }> => {
+    const parseBibFiles = (): Record<string, { author: string; year: string; title: string; journal: string }> => {
       const text = document.getText();
-      const citations: Record<string, { author: string; year: string; title: string }> = {};
+      const citations: Record<string, { author: string; year: string; title: string; journal: string }> = {};
       const bibNames: string[] = [];
 
       const bibMatch = /\\bibliography\{([^}]+)\}/.exec(text);
@@ -63,6 +63,7 @@ export class VisualEditorProvider implements vscode.CustomTextEditorProvider {
             const authorM = /author\s*=\s*\{([^}]+)\}/i.exec(body);
             const yearM = /year\s*=\s*\{?(\d{4})\}?/i.exec(body);
             const titleM = /title\s*=\s*\{([^}]+)\}/i.exec(body);
+            const journalM = /journal\s*=\s*\{([^}]+)\}/i.exec(body);
             if (authorM || yearM) {
               const rawAuthor = authorM ? authorM[1] : '';
               const authors = rawAuthor.split(/\s+and\s+/);
@@ -78,6 +79,7 @@ export class VisualEditorProvider implements vscode.CustomTextEditorProvider {
                 author: formatted,
                 year: yearM ? yearM[1] : '',
                 title: titleM ? titleM[1] : '',
+                journal: journalM ? journalM[1] : '',
               };
             }
           }

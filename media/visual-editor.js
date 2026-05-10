@@ -413,9 +413,22 @@
       var inM = mat(text, pos, /^\\(?:input|include)\s*\{/);
       if (inM) { var ib = pos + inM[0].length - 1; var ic = braceContent(text, ib); if (ic !== null) { blockEnd = ib + ic.length + 2; html += wrapBlock(text.substring(blockStart, blockEnd), '<div class="input-marker">[Input: ' + esc(ic) + ']</div>', base + blockStart, base + blockEnd); pos = blockEnd; continue; } }
 
-      // \bibliography etc — skip
-      var biM = mat(text, pos, /^\\(?:bibliography|bibliographystyle|pagestyle|thispagestyle)\s*\{/);
-      if (biM) { var bb = pos + biM[0].length - 1; var bc = braceContent(text, bb); pos = bc !== null ? bb + bc.length + 2 : pos + biM[0].length; continue; }
+      // \bibliographystyle, \pagestyle, \thispagestyle — skip
+      var bsM = mat(text, pos, /^\\(?:bibliographystyle|pagestyle|thispagestyle)\s*\{/);
+      if (bsM) { var bsb = pos + bsM[0].length - 1; var bsc = braceContent(text, bsb); pos = bsc !== null ? bsb + bsc.length + 2 : pos + bsM[0].length; continue; }
+
+      // \bibliography{...} — render reference list
+      var bibM = mat(text, pos, /^\\bibliography\s*\{/);
+      if (bibM) {
+        var bib = pos + bibM[0].length - 1; var bibc = braceContent(text, bib);
+        if (bibc !== null) {
+          blockEnd = bib + bibc.length + 2;
+          var bibSrc = text.substring(blockStart, blockEnd);
+          blockRendered = renderBibliography();
+          html += wrapBlock(bibSrc, blockRendered, base + blockStart, base + blockEnd);
+          pos = blockEnd; continue;
+        }
+      }
 
       // Paragraph — collect text until next block-level element or double newline
       var paraEnd = findParaEnd(text, pos);
@@ -620,6 +633,27 @@
   // =============================================
   // CITATION FORMATTING
   // =============================================
+  function renderBibliography() {
+    var keys = Object.keys(citations);
+    if (keys.length === 0) return '<div class="bibliography"><h2 class="section-heading">References</h2><p class="bib-empty">No .bib file found or no entries parsed.</p></div>';
+    keys.sort(function(a, b) {
+      var aa = citations[a].author || a, bb = citations[b].author || b;
+      return aa.localeCompare(bb);
+    });
+    var h = '<div class="bibliography"><h2 class="section-heading">References</h2><div class="bib-list">';
+    for (var i = 0; i < keys.length; i++) {
+      var c = citations[keys[i]];
+      h += '<div class="bib-entry">';
+      h += '<span class="bib-author">' + esc(c.author) + '</span>';
+      if (c.year) h += ' <span class="bib-year">(' + esc(c.year) + ').</span>';
+      if (c.title) h += ' <span class="bib-title">"' + esc(c.title) + '."</span>';
+      if (c.journal) h += ' <em>' + esc(c.journal) + '.</em>';
+      h += '</div>';
+    }
+    h += '</div></div>';
+    return h;
+  }
+
   function fmtCite(keys, style) {
     var parts = keys.split(',');
     var rendered = [];

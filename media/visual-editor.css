@@ -215,6 +215,40 @@ p:empty { display: none; }
 /* (math source editor uses .ve-source now) */
 
 /* Block editing (click-to-reveal-source) */
+/* Bibliography */
+.bibliography {
+  margin-top: 2em;
+}
+
+.bib-list {
+  margin-top: 12px;
+}
+
+.bib-entry {
+  margin-bottom: 10px;
+  padding-left: 2em;
+  text-indent: -2em;
+  line-height: 1.5;
+  font-size: 0.93em;
+}
+
+.bib-author {
+  font-weight: 600;
+}
+
+.bib-year {
+  color: var(--ve-fg);
+}
+
+.bib-title {
+  font-style: italic;
+}
+
+.bib-empty {
+  color: var(--ve-muted);
+  font-style: italic;
+}
+
 .ve-block {
   cursor: pointer;
   border-radius: 4px;
