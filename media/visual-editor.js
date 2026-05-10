@@ -528,29 +528,29 @@
     if (en === 'sidewaystable' || en === 'sidewaysfigure') return renderEnvironment(en === 'sidewaystable' ? 'table' : 'figure', content, opts, fullSrc);
     if (en === 'threeparttable') return renderTableEnv(content);
     if (en === 'tblr' || en === 'longtblr') return '<div class="table-placeholder">[Table content]</div>';
-    if (en === 'landscape') return renderInnerBlocks(content);
+    if (en === 'landscape') return renderNestedContent(content);
     if (en === 'subfigure') return renderSubfigure(content);
-    if (en === 'adjustbox' || en === 'adjustwidth' || en === 'spacing') return renderInnerBlocks(content);
-    if (en === 'singlespace' || en === 'doublespace' || en === 'onehalfspace') return renderInnerBlocks(content);
-    if (en === 'abstract') return '<div class="abstract"><div class="abstract-title">Abstract</div><div class="abstract-body">' + renderInnerBlocks(content) + '</div></div>';
+    if (en === 'adjustbox' || en === 'adjustwidth' || en === 'spacing') return renderNestedContent(content);
+    if (en === 'singlespace' || en === 'doublespace' || en === 'onehalfspace') return renderNestedContent(content);
+    if (en === 'abstract') return '<div class="abstract"><div class="abstract-title">Abstract</div><div class="abstract-body">' + renderNestedContent(content) + '</div></div>';
     if (en === 'figure' || en === 'figure*') return renderFigure(content);
     if (en === 'table' || en === 'table*') return renderTableEnv(content);
     if (en === 'tabular' || en === 'tabular*' || en === 'tabularx') return renderTabular(content);
     if (en === 'itemize') return renderList(content, 'ul');
     if (en === 'enumerate') return renderList(content, 'ol');
     if (en === 'description') return renderDescList(content);
-    if (en === 'quote' || en === 'quotation') return '<blockquote class="latex-quote">' + renderInnerBlocks(content) + '</blockquote>';
-    if (en === 'center') return '<div class="center">' + renderInnerBlocks(content) + '</div>';
+    if (en === 'quote' || en === 'quotation') return '<blockquote class="latex-quote">' + renderNestedContent(content) + '</blockquote>';
+    if (en === 'center') return '<div class="center">' + renderNestedContent(content) + '</div>';
     if (en === 'verbatim' || en === 'lstlisting') return '<pre class="verbatim">' + esc(content) + '</pre>';
-    if (en === 'minipage') return '<div class="minipage">' + renderInnerBlocks(content) + '</div>';
+    if (en === 'minipage') return '<div class="minipage">' + renderNestedContent(content) + '</div>';
 
     var thms = ['theorem','lemma','proposition','corollary','definition','remark','example','proof','assumption','conjecture','observation','claim','fact','hypothesis','notation'];
     if (thms.indexOf(en) !== -1) {
       var lbl = en.charAt(0).toUpperCase() + en.slice(1);
       var isPf = en === 'proof';
-      return '<div class="theorem-env ' + en + '-env"><span class="theorem-label">' + (isPf ? 'Proof.' : lbl + '.') + '</span> ' + renderInnerBlocks(content) + (isPf ? ' <span class="qed">&#9633;</span>' : '') + '</div>';
+      return '<div class="theorem-env ' + en + '-env"><span class="theorem-label">' + (isPf ? 'Proof.' : lbl + '.') + '</span> ' + renderNestedContent(content) + (isPf ? ' <span class="qed">&#9633;</span>' : '') + '</div>';
     }
-    return '<div class="unknown-env">' + renderInnerBlocks(content) + '</div>';
+    return '<div class="unknown-env">' + renderNestedContent(content) + '</div>';
   }
 
   function renderTitlepage(content) {
@@ -594,7 +594,92 @@
     return h;
   }
 
-  function renderInnerBlocks(content) {
+  function renderNestedContent(text) {
+    var html = '', pos = 0;
+    var paraAccum = '';
+
+    function flushPara() {
+      var cleaned = stripComments(paraAccum).trim();
+      if (cleaned) html += '<p>' + processInline(cleaned) + '</p>';
+      paraAccum = '';
+    }
+
+    text = stripComments(text);
+
+    while (pos < text.length) {
+      // Skip whitespace
+      if (/\s/.test(text[pos])) {
+        var nlc = 0, ne = pos;
+        while (ne < text.length && /\s/.test(text[ne])) { if (text[ne] === '\n') nlc++; ne++; }
+        if (nlc >= 2) { flushPara(); pos = ne; continue; }
+        paraAccum += ' ';
+        pos = ne;
+        continue;
+      }
+
+      // \begin{env}
+      var envM = mat(text, pos, /^\\begin\{(\w+\*?)\}(\[[^\]]*\])?/);
+      if (envM) {
+        flushPara();
+        var en = envM[1], ebs = pos + envM[0].length;
+        var ee = findEndEnv(text, ebs, en);
+        if (ee !== -1) {
+          var ec = text.substring(ebs, ee);
+          var fs2 = text.substring(pos, ee + ('\\end{' + en + '}').length);
+          html += renderEnvironment(en, ec, envM[2] || '', fs2);
+          pos = ee + ('\\end{' + en + '}').length;
+          continue;
+        }
+      }
+
+      // \section etc
+      var secM = mat(text, pos, /^\\(part|chapter|section|subsection|subsubsection|paragraph|subparagraph)\*?\s*\{/);
+      if (secM) {
+        flushPara();
+        var sl = secM[1], sbs = pos + secM[0].length - 1, st = braceContent(text, sbs);
+        if (st !== null) {
+          var tags = {part:'h1',chapter:'h1',section:'h2',subsection:'h3',subsubsection:'h4',paragraph:'h5',subparagraph:'h6'};
+          html += '<' + (tags[sl]||'h2') + ' class="section-heading section-' + sl + '">' + processInline(st) + '</' + (tags[sl]||'h2') + '>';
+          pos = sbs + st.length + 2;
+          continue;
+        }
+      }
+
+      // Skip commands
+      var skM = mat(text, pos, /^\\(?:clearpage|newpage|pagebreak|bigskip|medskip|smallskip|noindent|indent|centering|raggedright|raggedleft|vfill|hfill|footnotesize|scriptsize|small|normalsize|large|Large|LARGE|huge|Huge|protect|relax)\b\s*/);
+      if (skM) { pos += skM[0].length; continue; }
+
+      var spM = mat(text, pos, /^\\(?:vspace|hspace|setlength|setcounter|addtocounter|stepcounter|setstretch|renewcommand)\*?\s*\{/);
+      if (spM) { var sb = pos + spM[0].length - 1; var sc = braceContent(text, sb); var se2 = sc !== null ? sb + sc.length + 2 : pos + spM[0].length; if (text[se2] === '{') { var s2 = braceContent(text, se2); if (s2 !== null) se2 = se2 + s2.length + 2; } pos = se2; continue; }
+
+      var lbM = mat(text, pos, /^\\label\s*\{/);
+      if (lbM) { var lb = pos + lbM[0].length - 1; var lc = braceContent(text, lb); pos = lc !== null ? lb + lc.length + 2 : pos + lbM[0].length; continue; }
+
+      // $$
+      if (text[pos] === '$' && text[pos+1] === '$') {
+        flushPara();
+        var de = text.indexOf('$$', pos+2);
+        if (de !== -1) { html += renderMathDisplay(text.substring(pos+2, de)); pos = de+2; continue; }
+      }
+      // \[
+      if (text[pos] === '\\' && text[pos+1] === '[') {
+        flushPara();
+        var se = text.indexOf('\\]', pos+2);
+        if (se !== -1) { html += renderMathDisplay(text.substring(pos+2, se)); pos = se+2; continue; }
+      }
+
+      // \maketitle
+      if (mat(text, pos, /^\\maketitle\b/)) { pos += 10; continue; }
+
+      // Accumulate paragraph text
+      paraAccum += text[pos];
+      pos++;
+    }
+    flushPara();
+    return html;
+  }
+
+  function renderNestedContent(content) {
     var cleaned = stripComments(content);
     var paras = cleaned.split(/\n\s*\n/);
     var html = '';
