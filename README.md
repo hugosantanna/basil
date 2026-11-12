@@ -1,3 +1,10 @@
+> **Basil has moved.** The project continues as **[TeX Visual](https://github.com/hugosantanna/tex-visual)**:
+> the same idea, on an editor where the rendered text itself is editable. Everything Basil rendered
+> for real papers is there, and Basil's history is part of that repository. Install it from the
+> [latest release](https://github.com/hugosantanna/tex-visual/releases/latest).
+>
+> This repository is archived and no longer updated.
+
 <p align="center">
   <img src="assets/basil-icon.png" alt="Basil" width="200">
 </p>
